@@ -31,11 +31,3 @@ end
 assign o_led_enable = shift_register;
 
 endmodule
-
-
-    // shift_register <= (shift_register == 4'b0001) ? 4'b1000 : (shift_register >> 1);
-    // shift_register <= (shift_register == 4'b1000) ? 4'b0100 : 
-    //                   (shift_register == 4'b1000) ? 4'b0010 : 
-    //                   (shift_register == 4'b1000) ? 4'b0001 : 
-    //                                                 4'b1000 ;
-    // shift_register <= (shift_register<4'b1000) ? shift_register + shift_register : 'b0001;
