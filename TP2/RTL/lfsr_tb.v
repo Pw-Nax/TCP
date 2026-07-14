@@ -28,7 +28,7 @@ module tb_lfsr_generator();
     // Invierte la señal cada 10ns (Periodo de 20ns = 50 MHz)
     always #10 clock = ~clock;
 
-  
+   
     initial begin
     
         // Estado Inicial (Tiempo 0)
@@ -63,7 +63,7 @@ module tb_lfsr_generator();
 
         // Prueba 4: Pausar Generación 
         $display("Pausa en la generacion de secuencia");
-        @(posedge clock);
+        @(posedge clock); 
         i_valid = 0;
 
         #40;
