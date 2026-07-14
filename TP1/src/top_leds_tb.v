@@ -1,3 +1,19 @@
+/*
+Probar usar task creando funciones y despues con un makefile llamar haciendo variables 
+'include TEST_FILE INCLUIR "TEST(tests/test_reset.svh)" revisar el makefile para poder meter varios test una regresion
+duid , makefile (orquestador de test, usando timings que me permite setear la cantidad de cpu 
+lo que hace el makefile es llamarse a si mismo pero para cada uno de los test.)
+funcion con times , arma una white card 
+ buscar jenkins para correr regresiones.
+
+ para chequear dos cosas al mismo tiempo usamos fork (join) 
+
+ UVM framework basado en system verilog se usa mucho en verificacion 
+
+ verificacion con system verilog
+ y diseño con verilog
+*/
+
 `default_nettype none
 `timescale 1ns/1ns
 
@@ -45,37 +61,32 @@ task reset ();
 endtask
 
 
-`define TEST1 //Selector test
+`define TEST1 
 
 
-
-// TEST 1: Comprobación de Reset e Inicialización
 
 `ifdef TEST1
   initial begin
     $display("TEST 1: Comprobacion Reset");
     
-    // 1. Ponemos algo en las entradas
+ 
     i_sw = 4'b1111;
-    
-    // 2. Activamos el reset
     i_reset = 1'b0;
-    #25; // Esperamos unos ciclos
+    #25; 
     
-    // 3. Comprobamos que las salidas estén en un estado seguro/inicial
-    // Nota: Ajusta este valor si tu Shift Register inicia en un valor distinto a 0.
+  
     if (o_led !== 4'b1000 && o_led_b !== 4'b1000 && o_led_g !== 4'b1000) begin
-      $display("ERROR: El Shift Register no se inicializó correctamente en el reset.");
-      $display("TEST FAILED");
+      $display("error: El Shift no se inicializó correctamente en el reset.");
+      $display("fail");
       $finish(2);
     end else begin
-      $display("EXITO: Reset inicializa salidas correctamente.");
+      $display("Reset inicializa ok.");
     end
     
-    // 4. Liberamos reset y vemos si arranca
+    
     i_reset = 1'b1;
     #100;
-    $display("TEST 1 PASSED");
+    $display("test 1 ok");
     $finish();
   end
 `endif
@@ -90,7 +101,7 @@ endtask
   reg [NB_COUNTER - 1 : 0] clock_counter ;
 
   initial begin
-    $display("TEST 2: Control de Pausa (Enable)");
+    $display("TEST 2: Control de Pausa");
     
     // Forzamos límites para simulación rápida
     force u_top_leds.u_counter.limit_0   = 32'h0000_0010;
@@ -108,8 +119,8 @@ endtask
       i_sw[0] = 'd1; // Habilitamos
       #($urandom_range(1,5) * 1us);
 
-      i_sw[0]     = 'd0   ; // PAUSAMOS
-      prev_o_led  = o_led ; // Guardamos estado
+      i_sw[0]     = 'd0   ; // pausa
+      prev_o_led  = o_led ; // save state
 
       clock_counter = $urandom_range(50,500);
 
@@ -117,13 +128,13 @@ endtask
       for(integer j=0; j<clock_counter; j=j+1) begin
         @(posedge clock);
         if(prev_o_led != o_led) begin
-          $display("ERROR: El valor del led cambio estando en PAUSA.");
-          $display("TEST FAILED");
+          $display("error");
+          $display("test fail");
           $finish(2);
         end 
       end
     end
-    $display("TEST 2 PASSED");
+    $display("TEST 2 ok");
     $finish();
   end
 `endif
@@ -135,31 +146,31 @@ endtask
   initial begin
     $display("--- INICIANDO TEST 3: Seleccion de Limites (R0 a R3) ---");
     
-    // Forzamos límites bajos para poder ver los cambios en la gráfica
+
     force u_top_leds.u_counter.limit_0   = 32'd10;
     force u_top_leds.u_counter.limit_1   = 32'd20;
     force u_top_leds.u_counter.limit_2   = 32'd30;
     force u_top_leds.u_counter.limit_3   = 32'd40;
 
     reset();
-    i_sw[0] = 1'b1; // Habilitamos contador
+    i_sw[0] = 1'b1; // enable  contador
     
     // Límite R0
-    $display("Probando Limite R0...");
+    $display("Probando Limite R0");
     i_sw[2:1] = 2'b00; 
-    #1000; // Dejamos correr un tiempo para observar en waveforms
+    #1000; 
     
     // Límite R1
-    $display("Probando Limite R1...");
+    $display("Probando Limite R1");
     i_sw[2:1] = 2'b01;
     #2000; 
     
     // Límite R3
-    $display("Probando Limite R3...");
+    $display("Probando Limite R3");
     i_sw[2:1] = 2'b11;
     #4000;
     
-    $display("TEST 3 COMPLETO: Revisar waveforms (GTKWave/Vivado) para verificar frecuencias.");
+    $display("test 3 terminado: Revisar osciloscopio");
     $finish();
   end
 `endif
@@ -178,23 +189,22 @@ endtask
     reset();
     i_sw[0] = 1'b1; // Enable
     
-    // Arrancamos con el límite más lento (R3)
-    $display("Iniciando con Limite R3 (Lento)...");
+   
+    $display("Iniciando  R3 (Lento)");
     i_sw[2:1] = 2'b11; 
     
-    // Esperamos 60 ciclos (Mitad de cuenta de R3, pero ya superó el valor de R0 que es 20)
+
     repeat(60) @(posedge clock); 
     
-    // Cambiamos bruscamente al límite más rápido (R0)
-    $display("Cambio abrupto a Limite R0 (Rapido)...");
+  
+    $display("Cambio R0");
     i_sw[2:1] = 2'b00;
     
-    // Dejamos correr. Si el diseño está mal hecho, el contador se colgará esperando
-    // llegar al máximo de 32 bits antes de volver a cero. Si está bien, debería 
-    // resetear el contador y ajustarse rápido.
+   //run - error
+
     #1000; 
     
-    $display("TEST 4 COMPLETO: Verificar formas de onda.");
+    $display("test 4 finish mira osc.");
     $finish();
   end
 `endif
