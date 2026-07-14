@@ -1,0 +1,25 @@
+
+    {
+    // --- Entorno de Draw.io ---
+    "drawio.theme": "automatic",
+    "drawio.offline": true,
+    "drawio.compactMode": true,
+    "drawio.autoSave": true,
+
+    // --- Entorno de Edición Markdown ---
+    "editor.wordWrap": "on",
+    "markdown.preview.breaks": true,
+    "markdown.preview.scrollEditorWithPreview": true,
+    "editor.snippetSuggestions": "top",
+
+     --- Renderizado Técnico y Matemático (Requiere Markdown Preview Enhanced) ---
+    "markdown-preview-enhanced.mathRenderingOption": "KaTeX",
+    "markdown-preview-enhanced.enableExtendedMath": true,
+    "markdown-preview-enhanced.automaticallyShowPreviewOfMarkdownBeingEdited": true,
+    
+    // Opcional: Desactiva el minimapa si sientes que te quita espacio al tener la pantalla dividida
+    "editor.minimap.enabled": false
+
+    
+}
+
