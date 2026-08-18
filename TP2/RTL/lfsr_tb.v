@@ -25,8 +25,8 @@ module tb_lfsr_generator();
     );
 
  
-    // Invierte la señal cada 10ns (Periodo de 20ns = 50 MHz)
-    always #10 clock = ~clock;
+    // Invierte la señal cada 10ns (Periodo de 100ns = 10 MHz)
+    always #50 clock = ~clock;
 
    
     initial begin
@@ -34,7 +34,7 @@ module tb_lfsr_generator();
         // Estado Inicial (Tiempo 0)
         clock        = 0;
         i_rst        = 0;
-        i_soft_reset = 0;
+        i_soft_rst = 0;
         i_valid      = 0;
         i_seed       = 16'hDEAD; // Semilla de prueba para el soft_reset (1101 1110 1010 1101)
 
