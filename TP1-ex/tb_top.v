@@ -1,130 +1,180 @@
-`timescale 1ns/100ps
+module top
 
-module tb_top ();
+  #(
+    
+    parameter NB_COUNTER    = 32 ,
+    parameter NB_SWITCH     = 4  ,
+    parameter NB_BTN        = 4  ,
+    parameter NB_LEDS       = 4  ,
+    parameter N_COLOR       = 3  
 
-    parameter NB_SW      = 4  ;
-    parameter NB_BTN     = 4  ;
-    parameter NB_COUNTER = 16  ;   // bajo para simular más rápido
-    parameter NB_LEDS    = 4  ;
-
-    // DUT signals
-    wire [NB_LEDS - 1 : 0] o_led_r ;
-    wire [NB_LEDS - 1 : 0] o_led_g ;
-    wire [NB_LEDS - 1 : 0] o_led_b ;
-    wire [NB_LEDS - 1 : 0] o_led   ;
-
-    reg [NB_SW - 1 : 0]    i_sw    ;
-    reg [NB_BTN - 1 : 0]   i_btn   ;
-    reg                    i_reset ;
-    reg                    clock   ;
-
-    // Clock
-    always #5 clock = ~clock;
-
-    // --F - F  ---
-    task pulse_btn(input integer id);
-    begin
-        @(posedge clock);
-        i_btn[id] = 1'b1;
-        #25;
-        @(posedge clock);
-        i_btn[id] = 1'b0;
-    end
-    endtask
-
-    task set_speed(input [1:0] speed, integer hold_time);
-    begin
-        @(posedge clock);
-        i_sw[2:1] = speed;
-        #(hold_time);
-    end
-    endtask
-
-    // --- Estímulo ---
-    initial begin
-       
-        clock   = 1'b0;
-        i_reset = 1'b1;
-        i_sw    = 4'b0000;
-        i_btn   = 4'b0000;
-
-        // Reset inicial
-        #20;
-        i_reset = 1'b0;   // liberar reset
-
-        // ---- Enable contador ----
-        @(posedge clock);
-        i_sw[0] = 1'b1;
-        i_sw[1] = 1'b1;
-        i_sw[2] = 1'b0; // R0
-
-        // ---- Probar colores ----
-        #20; pulse_btn(1);   // Rojo
-        #20; pulse_btn(2);   // Verde
-        #20; pulse_btn(3);   // Azul
-        #20; pulse_btn(1);   // Volver a Rojo
-
-        // ---- Probar velocidades ----
-        set_speed(2'b00, 1000); // R0
-        #50; pulse_btn(2);
-        set_speed(2'b01, 1000); // R1
-        #50; pulse_btn(3);
-        set_speed(2'b10, 1000); // R2
-        #50; pulse_btn(2);
-        set_speed(2'b11, 1000); // R3
-
-        // ---- Cambiar dirección SR ----
-        @(posedge clock);
-        i_sw[3] = 1'b1;
-        #200;
-        @(posedge clock);
-        i_sw[3] = 1'b0;
-        #300;
-
-        // ---- Cambiar a modo Flash ----
-        $display("t=%0t | Mode flash", $time);
-        #200; pulse_btn(0); // Toggle a FS
-        #2000;
-        pulse_btn(0); // Volver a SR
-        #2000;
-
-        // ---- Apagar enable (todo se congela) ----
-        @(posedge clock);
-        i_sw[0] = 1'b0;
-        #500;
-        @(posedge clock);
-        i_sw[0] = 1'b1;  // reanudar
-        #1000;
-        // ---- Finalizar simulación ----
-
-        $finish;
-    end
-
-    // --- Monitoreo ---
-    initial begin
-        $monitor("t=%0t | R=%b G=%b B=%b | o_led=%b | SW=%b BTN=%b reset=%b",
-                  $time, o_led_r, o_led_g, o_led_b, o_led, i_sw, i_btn, i_reset);
-    end
-
-    // --- Instancia del DUT ---
-    top 
-    #(
-        .NB_SWITCH (NB_SW) ,
-        .NB_BTN    (NB_BTN) ,
-        .NB_COUNTER(NB_COUNTER) ,
-        .NB_LEDS   (NB_LEDS) 
     )
-    u_top 
-    (
-        .o_led_r (o_led_r),
-        .o_led_g (o_led_g),
-        .o_led_b (o_led_b),
-        .o_led   (o_led),
+   (
+    output [NB_LEDS     - 1 : 0] o_led   ,  
+    output [NB_LEDS     - 1 : 0] o_led_r ,
+    output [NB_LEDS     - 1 : 0] o_led_b ,
+    output [NB_LEDS     - 1 : 0] o_led_g ,
 
-        .i_sw    (i_sw),
-        .i_btn   (i_btn),
-        .i_reset (i_reset),
-        .clock   (clock)       
+    input  [NB_SWITCH   - 1 : 0] i_sw    ,
+    input  [NB_BTN  - 1 : 0]     i_btn   ,
+    input                        i_reset ,
+    input                        clock
+    );
+
+
+   //  Colores de LEDS
+   localparam RED  =  3'b001;        
+   localparam GREEN = 3'b010;
+   localparam BLUE  = 3'b100;
+
+   // Vars
+   wire                    connect_count_to_mode   ;   //  Pulso desde contador
+   wire [NB_LEDS  - 1 : 0]  sr_leds                ;   //  Salida shiftregister  
+   wire [NB_LEDS  - 1 : 0]  fs_leds                ;   //  Salida Flash
+   reg  [NB_BTN  - 1 : 0 ]  btn_previous           ;   //  Estado anterior de los botones
+   reg  [NB_BTN  - 1 : 0 ]  btn_rise               ;   //  Flanco de subida de los botones
+   reg                      select_mode            ;   //  Modo de operación 0 = SR, 1 = FS
+   reg  [NB_BTN  - 1 : 0 ]  btn_status             ;   //  Estado de los botones de color
+   reg  [N_COLOR - 1 : 0 ]  color_selected         ;   //  Color seleccionado
+
+   // VIO E ILA
+     
+   wire [NB_BTN  - 1 : 0    ]  btn_w                  ;
+   wire [NB_BTN      - 1 : 0]  btn_from_vio           ;
+   wire [NB_SWITCH   - 1 : 0]  sw_w                   ;
+   wire [NB_SWITCH   - 1 : 0]  sw_from_vio            ;
+   wire                        reset_select           ; //VIO o HW
+   wire                        i_reset_from_vio       ;
+   wire                        sel_vioOrHw            ; //0 HardW  -1 VIO
+
+
+
+   //Control por VIO
+   assign btn_w =        (sel_vioOrHw) ? btn_from_vio      : i_btn   ;
+   assign sw_w  =        (sel_vioOrHw) ? sw_from_vio       : i_sw    ;
+   assign reset_select = (sel_vioOrHw) ? ~i_reset_from_vio : ~i_reset;
+
+   
+   always@(posedge clock or posedge reset_select) begin
+      if (reset_select)
+      begin
+        btn_status             <= {N_COLOR{1'b0} };
+        color_selected         <= {N_COLOR{1'b0}};
+        btn_previous           <= {NB_BTN{1'b0} };
+        btn_rise               <= {NB_BTN{1'b0} };
+        select_mode            <= 1'b0; // Modo SR por defecto
+      end
+
+      else begin
+         // Se verifica que botón se precionó. Si se preciona mas de una vez,
+         // no hay cambios
+         btn_previous    <= btn_w;                         // Guardar el estado anterior de los pulsadores
+         btn_rise        <= btn_w & ~btn_previous;         // Calcular el flanco de subida
+
+         // Cambiar el color según el pulsador presionado
+         case (btn_rise)
+            4'b0010: color_selected         <= RED;         // Si se presiona el botón 1, cambiar a RED
+            4'b0100: color_selected         <= GREEN;       // Si se presiona el botón 2, cambiar a GREEN
+            4'b1000: color_selected         <= BLUE;        // Si se presiona el botón 3, cambiar a BLUE
+            default: 
+                     color_selected         <= color_selected;       // Si no se presiona ningún botón, mantener igual
+         endcase
+         //Actualizo registro visible
+       btn_status[3:1] <=color_selected;
+
+        //Cambia el modo (SR o FS) si se presiona i_btn[0]
+         if (btn_rise[0]) begin
+          select_mode <= ~select_mode; 
+          btn_status[0] <= ~select_mode;
+         end
+
+      end
+
+      
+
+   end
+
+
+   count
+   #(
+      .NB_SWITCH        (NB_SWITCH - 1        ),
+      .NB_COUNTER       (NB_COUNTER           )
+   )
+   u_count
+   (
+      .o_valid          (connect_count_to_mode),  
+      .i_switch         (i_sw[2:0]            ),
+      .i_reset          (reset_select          ),
+      .clock            (clock                )
+   );
+
+   shiftregister
+   #(
+      .NB_LEDS          (NB_LEDS              )
+   )
+   u_shiftregister
+   (
+      .o_shift          (sr_leds              ),
+      .i_valid          (connect_count_to_mode),
+      .i_dir            (i_sw[3]              ),
+      .i_reset          (reset_select          ),
+      .clock            (clock                )
+   );
+
+   flash 
+   #(
+      .NB_LEDS          (NB_LEDS              )
+   )
+   u_flash
+   (
+      .o_flash          (fs_leds              ),
+      .i_valid          (connect_count_to_mode),
+      .i_reset          (reset_select          ),
+      .clock            (clock                )
+   );
+
+
+   
+
+   ila
+   u_ila
+   (
+      .clk_0    (clock   ),
+      .probe0_0 (o_led   ),
+      .probe1_0 (o_led_r ),
+      .probe2_0 (o_led_g ),
+      .probe3_0 (o_led_b )
     );
     
-endmodule
+    
+    vio
+    u_vio
+    (
+      .clk_0        (clock           ),        //1 bit
+      .probe_in0_0  (o_led           ),        //4 bits
+      .probe_in1_0  (o_led_r         ),        //4 bits
+      .probe_in2_0  (o_led_g         ),        //4 bits
+      .probe_in3_0  (o_led_b         ),        //4 bits
+      .probe_out0_0 (sel_vioOrHw     ),        //1 bit
+      .probe_out1_0 (i_reset_from_vio),        //1 bit
+      .probe_out2_0 (sw_from_vio     ),        //4 bits
+      .probe_out3_0 (btn_from_vio    )         //4 bits
+
+    );
+
+
+   
+
+
+    
+    
+   // Asignar el color a los LED RGB
+    assign o_led_r = (color_selected == RED)   ? ((select_mode==1'b0)? sr_leds : fs_leds) : {NB_LEDS{1'b0}};
+    assign o_led_g = (color_selected == GREEN) ? ((select_mode==1'b0)? sr_leds : fs_leds) : {NB_LEDS{1'b0}};
+    assign o_led_b = (color_selected == BLUE)  ? ((select_mode==1'b0)? sr_leds : fs_leds) : {NB_LEDS{1'b0}};
+
+   // Encender los leds de botones
+    assign o_led = btn_status;
+
+
+endmodule 
