@@ -1,226 +1,203 @@
-
-
-
+// =========================================================================
+// ARCHIVO: lfsr_task.vh
+// DESCRIPCION: Tareas de estimulo y Aserciones para el sistema LFSR
+// =========================================================================
 
 task aplicar_reset;
     begin
-        $display("[%0t] Aplicando Reset...", $time);
+        $display("[%0t] Aplicando Reset Sincronizado...", $time);
         reset      = 1'b1;
         i_soft_rst = 1'b0;
         i_valid    = 1'b0;
         i_seed     = $random;
-        #20; 
+        error_mask = 16'd0; 
+        
+        repeat(3) @(posedge clk); 
         reset      = 1'b0;
-        #10;
+        repeat(2) @(posedge clk); 
     end
 endtask
 
 task test_normal;
     begin
-        $display("[%0t] TEST: Sincronizacion Normal", $time);
-        i_valid = 1'b1; 
-        #300; 
+        $display("[%0t] TEST 1: Sincronizacion Normal", $time);
+        i_valid    = 1'b1; 
+        error_mask = 16'd0;
+        
+        repeat(10) @(posedge clk); 
+
+        // --- ASSERTION ---
+        // Esperamos que el estado obtenido sea 1 (LOCKED)
+        assert (checker_status == 1'b1) 
+            else $error("[%0t] ASSERTION FAIL: El Checker esperaba estar en LOCKED (1) y obtuvo %0b", $time, checker_status);
+        
         if (checker_status == 1'b1)
-            $display("   -> [EXITO] El Checker llego a LOCKED.");
-        else
-            $display("   -> [FALLO] El Checker NO llego a LOCKED.");
+            $display("   -> [EXITO] Assertion Pass: El Checker alcanzo el estado LOCKED.");
     end
 endtask
 
 task test_forzar_error;
     begin
-        $display("[%0t] TEST: Inyeccion de Error", $time);
+        $display("[%0t] TEST 2: Inyeccion de Error Fatal (Perdida de Lock)", $time);
         i_valid = 1'b1; 
-        #200; // Dejamos que llegue a LOCKED
         
-        $display("[%0t] Forzando error (apagando generador)...", $time);
-        i_valid = 1'b0; 
-        #100; 
+        wait(checker_status == 1'b1);
+        repeat(2) @(posedge clk);
         
+        $display("[%0t] Inyectando mascara de error total...", $time);
+        error_mask = 16'hFFFF; 
+        
+        repeat(3) @(posedge clk); 
+        error_mask = 16'd0; 
+        
+        @(posedge clk); 
+
+        // --- ASSERTION ---
+        // Esperamos que el error prolongado rompa el lock (esperado = 0 / UNLOCKED)
+        assert (checker_status == 1'b0) 
+            else $error("[%0t] ASSERTION FAIL: El Checker debio pasar a UNLOCKED (0) por error fatal, pero se mantuvo en %0b", $time, checker_status);
+
         if (checker_status == 1'b0)
-            $display("   -> [EXITO] El Checker detecto el error y volvio a UNLOCKED.");
-        else
-            $display("   -> [FALLO] El Checker se quedo en LOCKED.");
+            $display("   -> [EXITO] Assertion Pass: El Checker detecto los errores y volvio a UNLOCKED.");
     end
 endtask
-
 
 task test_seed_random;
     begin
-    $display("%0t TEST: semilla random" , $time );
-    i_soft_rst = 1'b1;
-    i_seed     = $random;
-    #10; 
-    i_soft_rst = 1'b0;
-    #10;
+        $display("[%0t] TEST 3: Semilla Random con Soft Reset", $time);
+        
+        @(posedge clk);
+        i_soft_rst = 1'b1;
+        i_seed     = $random;
+        @(posedge clk);
+        i_soft_rst = 1'b0;
 
+        i_valid = 1'b1;
+        repeat(10) @(posedge clk); 
 
-    i_valid    = 1'b1;
-    #350;
+        // --- ASSERTION ---
+        assert (checker_status == 1'b1) 
+            else $error("[%0t] ASSERTION FAIL: El Checker fallo al sincronizar con la nueva semilla random. Estado actual: %0b", $time, checker_status);
 
-    if (checker_status == 1'b1)
-        $display("%0t  TODO OK" , $time);
-    else
-        $display("%0t ERROR con el bit" , $time) ;
+        if (checker_status == 1'b1)
+            $display("   -> [EXITO] Assertion Pass: Sincronizo perfecto con la nueva semilla.");
 
-    i_valid  = 1'b0;
-
-    $display("%0t Debería volver a UNLOCKED" , $time);
-
-    
-
-
-
-
+        i_valid  = 1'b0; 
     end
 endtask
-
-
-
-// 1. TEST DE FRONTERA: 4 válidos y 1 inválido
 
 task test_frontera_4v_1i;
-    integer i;
     begin
-        $display("[%0t] TEST umbrales (4 validos, 1 invalido)", $time);
+        $display("[%0t] TEST 4: Frontera (4 validos, 1 error antes del Lock)", $time);
+        aplicar_reset; 
+        
         i_valid = 1'b1;
+        repeat(4) @(posedge clk); 
         
-       
-        for (i = 0; i < 5; i = i + 1) begin
+        $display("[%0t] Inyectando 1 error justo antes del umbral...", $time);
+        error_mask = 16'h0001; 
+        @(posedge clk);
+        error_mask = 16'd0;    
         
-            #40; 
-            // Inyectamos 1 error forzado antes de que llegue al quinto
-            force dut_checker.i_output_lfsr = ~serial_data;
-            #10;
-            release dut_checker.i_output_lfsr;
-        end
-        
-        #50;
+        @(posedge clk);
+
+        // --- ASSERTION ---
+        // Esperamos que siga en UNLOCKED (0) porque el error arruinó la racha de 5
+        assert (checker_status == 1'b0) 
+            else $error("[%0t] ASSERTION FAIL: El Checker se lockeo (1) prematuramente a pesar del error de frontera.", $time);
+
         if (checker_status == 1'b0)
-            $display("test OK - Checker no locked");
-        else
-            $display("test fail - el Checker se lockeo con el error ingresado.");
-        
+            $display("   -> [EXITO] Assertion Pass: Checker rechazo el lock falso (Se mantuvo UNLOCKED).");
+            
         i_valid = 1'b0;
-        #20;
     end
 endtask
-
-
-// 2. TEST DE RESET EN MOMENTO ALEATORIO
 
 task test_reset_aleatorio;
     integer tiempo_random;
     begin
-        $display("[%0t] test  inyectando Reset en un momento aleatorio", $time);
+        $display("[%0t] TEST 5: Reset en momento aleatorio", $time);
         i_valid = 1'b1;
         
-       //Espero a que el sistema se lockee
         wait(checker_status == 1'b1);
         $display("[%0t] Sistema LOCKED detectado.", $time);
         
-        // Generamos un desfase aleatorio entre 10ns y 70ns usando $random
-        tiempo_random = ($random % 60) + 10;
-        #tiempo_random;
+        tiempo_random = ($urandom % 10) + 2;
+        repeat(tiempo_random) @(posedge clk);
         
-        $display("[%0t] Reset RANDOM", $time);
+        $display("[%0t] Disparando Reset sorpresa", $time);
         reset = 1'b1;
-        #20;
+        repeat(2) @(posedge clk);
         reset = 1'b0;
         
-        // Verificamos estado de sistema sistema
-        #300;
+        repeat(10) @(posedge clk);
+
+        // --- ASSERTION ---
+        assert (checker_status == 1'b1) 
+            else $error("[%0t] ASSERTION FAIL: El Checker no pudo recuperarse del reset sorpresa. Estado: %0b", $time, checker_status);
+
         if (checker_status == 1'b1)
-            $display("Test OK -  El Checker se recupero del reset random y volvio a LOCKED.");
-        else
-            $display("  TEST FAIL El Checker no entro a LOCKED.");
-        
+            $display("   -> [EXITO] Assertion Pass: El Checker se recupero del reset sorpresa.");
+            
         i_valid = 1'b0;
-        #20;
     end
 endtask
 
-
-// 3. TEST DE TRANSICIÓN Y OSCILACIÓN (Valid/Invalid)
-
-task test_oscilacion_estados;
+task test_histeresis_tolerancia;
     begin
-        $display("[%0t] TEST: Probando transiciones entre LOCKED y UNLOCKED", $time);
+        $display("[%0t] TEST 6: Tolerancia a fallos (2 errores, 1 acierto)", $time);
         i_valid = 1'b1;
         
-        // 1. Esperamos a que llegue a LOCKED por primera vez
         wait(checker_status == 1'b1);
-        $display("[%0t] Primer LOCKED alcanzado con exito.", $time);
-        #50;
+        repeat(2) @(posedge clk);
         
-        // 2. Forzamos errores consecutivos para forzar la caída a UNLOCKED
-        $display("[%0t] Forzando errores ", $time);
-        force dut_checker.i_output_lfsr = ~serial_data; #10;
-        force dut_checker.i_output_lfsr = ~serial_data; #10;
-        force dut_checker.i_output_lfsr = ~serial_data; #10;
-        release dut_checker.i_output_lfsr;
+        $display("[%0t] Inyectando 2 errores consecutivos (Tolerancia maxima)...", $time);
+        error_mask = 16'hFFFF; 
+        repeat(2) @(posedge clk);
         
-        #50;
-        if (checker_status == 1'b0)
-            $display("[%0t] Transicion exitosa a UNLOCKED confirmada.", $time);
-            
-        // 3. Dejamos que se recupere y vuelva a lockearse solo con tráfico limpio
-        #200;
-        if (checker_status == 1'b1)
-            $display(" Test OK - volvio a LOCKED tras el desenganche");
-        else
-            $display(" FAIL El sistema no pudo re-engancharse.");
+        error_mask = 16'd0; 
+        $display("[%0t] Enviando dato correcto (deberia limpiar los fallos)...", $time);
+        @(posedge clk); 
 
-        i_valid = 1'b0;
-        #20;
+        // --- ASSERTION ---
+        // Gracias a la histéresis, el sistema DEBE mantenerse en LOCKED (1)
+        assert (checker_status == 1'b1) 
+            else $error("[%0t] ASSERTION FAIL: La histéresis fallo. El Checker perdio el lock con solo 2 errores.", $time);
+        
+        if (checker_status == 1'b1)
+            $display("   -> [EXITO] Assertion Pass: El Checker aplico histéresis y mantuvo el candado.");
     end
 endtask
 
-task test_rafagas_con_metricas_y_resets_variables;
-    integer racha;
-    integer tipo_reset;
-    integer duracion_rafaga;
+task test_error_como_semilla;
     begin
-        $display("[%0t] test random rafagas y resets", $time);
+        $display("[%0t] TEST 7: Inyectar error y usarlo como nueva semilla (Soft Reset)", $time);
+        i_valid = 1'b1;
+        wait(checker_status == 1'b1);
+        repeat(2) @(posedge clk);
         
-        // Ejecutamos 4 rondas de prueba de estrés
-        for (racha = 0; racha < 4; racha = racha + 1) begin
-            
-            // 1. Definimos una duración aleatoria para la ráfaga (entre 20 y 80 ciclos)
-            duracion_rafaga = ($random % 60) + 20;
-            $display("[%0t] --- rafaga %0d iniciada (duracion: %0d ciclos) ---", $time, racha, duracion_rafaga);
-            
-            i_valid = 1'b1;
-            
-            // Dejamos correr el tráfico el tiempo estipulado
-            repeat(duracion_rafaga) @(posedge clk);
-            
-            // 2. Decidimos al azar qué tipo de reset aplicar (0 = Hard Reset, 1 = Soft Reset)
-            tipo_reset = $random % 2;
-            
-            if (tipo_reset == 0) begin
-                // --- HARD RESET ---
-                $display("[%0t] i_reset ON, Bits ok acumulados antes del corte: %0d", 
-                         $time, dut_checker.count_bits_ok);
-                reset = 1'b1;
-                #20;
-                reset = 1'b0;
-            end 
-            else begin
-                // --- SOFT RESET CON NUEVA SEMILLA ---
-                $display("[%0t] i_reset_soft ON Aplicando SOFT RESET (Cambio de semilla). Bits OK acumulados: %0d", 
-                         $time, dut_checker.count_bits_ok);
-                i_soft_rst = 1'b1;
-                i_seed     = $random; // Inyectamos una semilla totalmente nueva al vuelo
-                #10;
-                i_soft_rst = 1'b0;
-            end
-            
-            // 3. Damos un respiro para ver cómo el sistema se recupera y vuelve a lockearse
-            #150;
-        end
+        error_mask = 16'h1010; 
+        @(posedge clk);
         
+        $display("[%0t] Bus corrompido capturado: %h", $time, lfsr_data_corrupted);
+        
+        i_seed     = lfsr_data_corrupted; 
+        i_soft_rst = 1'b1;
+        
+        @(posedge clk);
+        i_soft_rst = 1'b0;
+        error_mask = 16'd0; 
+        
+        repeat(10) @(posedge clk);
+
+        // --- ASSERTION ---
+        // Esperamos que se resincronice exitosamente con la semilla parásita
+        assert (checker_status == 1'b1) 
+            else $error("[%0t] ASSERTION FAIL: El sistema fallo al resincronizarse con la semilla derivada del error.", $time);
+        
+        if (checker_status == 1'b1)
+            $display("   -> [EXITO] Assertion Pass: El sistema adopto la nueva semilla y se resincronizo.");
+            
         i_valid = 1'b0;
-        $display("[%0t] TEST  finalizado ok.", $time);
     end
 endtask
