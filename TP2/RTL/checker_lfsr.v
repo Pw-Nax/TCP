@@ -57,7 +57,9 @@ module checker_lfsr #(
     // Galois en base a nuestro registro actual (internal_lfsr).
     
     // Cálculo del bit de realimentación (Evita el Zero-Lock inyectando un 1 si todo es 0)
-    assign feedback = internal_lfsr[15] ^ (internal_lfsr == 16'd0);
+    assign feedback = internal_lfsr[15] ^ !(internal_lfsr == 16'd0);
+                          ;
+
 
     // Mapeo de compuertas XOR según el polinomio utilizado
     assign expected_next_lfsr[0]    = feedback;

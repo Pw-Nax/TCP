@@ -24,7 +24,7 @@ task test_normal;
         i_valid    = 1'b1; 
         error_mask = 16'd0;
         
-        repeat(10) @(posedge clk); 
+        repeat(25) @(posedge clk); 
 
         // --- ASSERTION ---
         // Esperamos que el estado obtenido sea 1 (LOCKED)

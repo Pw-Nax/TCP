@@ -41,8 +41,7 @@ module tb_lfsr_system;
         .i_soft_rst   (i_soft_rst),
         .i_valid      (i_valid),
         .i_seed       (i_seed),
-        .o_lfsr       (lfsr_data_clean),  // SALE LIMPIO
-        .o_serial_out (serial_data) 
+        .o_lfsr       (lfsr_data_clean)  // SALE LIMPIO
     );
 
     // ------------------------------------------------
@@ -73,7 +72,7 @@ module tb_lfsr_system;
     // Bloque principal de estímulos
     initial begin
         // Inicialización básica
-        test_id = 7;
+        test_id = 6;
         
         $display ("\n========================================");
         $display ("  Test seleccionado: %0d", test_id);

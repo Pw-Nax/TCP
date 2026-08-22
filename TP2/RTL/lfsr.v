@@ -16,7 +16,7 @@ module lfsr
     input  wire                     i_soft_rst          ,
     input  wire                     i_valid             ,
     input  wire [LFSR_WIDTH-1:0]    i_seed              ,
-    output reg  [LFSR_WIDTH-1:0]    o_lfsr              ,
+    output reg  [LFSR_WIDTH-1:0]    o_lfsr              
 
 );
     wire internal_feedback;
